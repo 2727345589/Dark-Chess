@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>暗棋象棋 · 位置兵种 · 翻面见真身</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-turn="r">
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark">棋</span>
+        <div class="brand-text">
+          <h1>暗棋象棋</h1>
+          <p>位置即走法 · 翻面见真身</p>
+        </div>
+      </div>
+      <div class="rule-chip">象可过河 · 士可出宫</div>
+    </header>
+
+    <main class="main">
+      <section class="board-area">
+        <div class="board-shell">
+          <div id="board" class="board">
+            <svg id="boardSvg" class="board-svg" viewBox="0 0 900 1000" aria-hidden="true"></svg>
+            <div id="pieces" class="pieces"></div>
+            <div id="marks" class="marks"></div>
+          </div>
+
+          <div id="result" class="result hidden">
+            <div class="result-card">
+              <div class="result-glyph" id="resultGlyph">帥</div>
+              <h2 id="resultTitle">红方胜</h2>
+              <p id="resultSub">擒王</p>
+              <button id="btnAgain" class="btn primary">再来一局</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="turn-card" id="turnCard">
+          <span class="turn-dot r" id="turnDot"></span>
+          <div class="turn-info">
+            <div class="turn-name" id="turnName">红方行棋</div>
+            <div class="turn-hint" id="turnHint">暗子按位置兵种直接走，走完翻面见真身</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btnNew" class="btn">新局</button>
+          <button id="btnRules" class="btn ghost">规则</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span>暗子</span><b id="statHidden">32</b></div>
+          <div class="stat"><span>明子</span><b id="statRevealed">0</b></div>
+          <div class="stat"><span>已吃</span><b id="statCaptured">0</b></div>
+        </div>
+
+        <section class="panel-card captured">
+          <h3>已吃棋子</h3>
+          <div class="cap-line">
+            <span class="cap-tag r">红</span>
+            <div id="capRed" class="cap-list"><span class="cap-empty">—</span></div>
+          </div>
+          <div class="cap-line">
+            <span class="cap-tag b">黑</span>
+            <div id="capBlack" class="cap-list"><span class="cap-empty">—</span></div>
+          </div>
+        </section>
+
+        <section class="panel-card log-box">
+          <h3>对局记录</h3>
+          <ol id="log" class="log"></ol>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">身份完全随机 · 暗子按位置兵种走 · 走完翻面 · 明子恢复真实身份</footer>
+  </div>
+
+  <div id="rules" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>暗棋象棋 · 规则</h2>
+        <button id="btnCloseRules" class="modal-x" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <h3>开局</h3>
+        <p>32 枚棋子（红黑 + 兵种）<b>完全随机</b>落在棋盘的 32 个标准点位上，全部背面朝上。</p>
+        <ul>
+          <li>每个点位有一个固定的<b>位置兵种</b>（标准棋局里该位置的棋子）。</li>
+          <li>暗子就按这个<b>位置兵种</b>的走法行走，方向按你这一方。</li>
+        </ul>
+
+        <h3>暗子怎么走（重点）</h3>
+        <ul>
+          <li>暗子先<b>行走（或吃子）</b>，走完<b>自动翻面</b>，露出它的真实身份与归属。</li>
+          <li>翻面后<b>恢复它自己的真实兵种</b>，之后按真实身份行动——可能和刚才的走法完全不同（例如刚才像車一样走，翻开却是兵）。</li>
+          <li>翻面后若是<b class="t-blue">对方</b>棋子：它留在落点，归对方所有。</li>
+          <li>暗子可以吃子：能吃对方明子，也能吃暗子。被吃的暗子会翻开——可能是对方的，也可能是<b>你自己的</b>。</li>
+          <li>若目标暗子翻开是<b class="t-red">己方</b>：不能吃自己人，该次行动取消、回合结束。</li>
+          <li>所以走暗子是一场赌博：你可能在替对方走棋。</li>
+        </ul>
+
+        <h3>明子走法</h3>
+        <p>保留基本走法，取消一切地域限制：</p>
+        <ul class="moves">
+          <li><b>車</b>　直线任意格，遇子止步。</li>
+          <li><b>馬</b>　走“日”，蹩马腿。</li>
+          <li><b>炮</b>　直线走；隔一子吃（暗子也能当炮架）。</li>
+          <li><b>相 / 象</b>　走“田”，塞象眼，<b>可以过河</b>。</li>
+          <li><b>仕 / 士</b>　斜走一格，<b>可以出九宫</b>。</li>
+          <li><b>帥 / 將</b>　直走一格，<b>可以出九宫</b>；双方将帅照面可直接互吃（飞将）。</li>
+          <li><b>兵 / 卒</b>　向前一格；<b>过河后可向前后左右任意方向走一格</b>。</li>
+        </ul>
+
+        <h3>胜负</h3>
+        <ul>
+          <li>吃掉对方将帅即获胜。</li>
+          <li>本玩法不设将军 / 应将：暗子中的将帅无法预警，直接以擒王定胜负。</li>
+          <li>无子可走，判负（困毙）。</li>
+        </ul>
+
+        <h3>小提示</h3>
+        <p>暗子会挡路，也能当炮架。记住已经翻开的棋子和双方阵容总量，翻得越多，越能猜出剩下的暗子是谁的——但每次翻面也都可能是在替对方走棋。</p>
+      </div>
+      <button id="btnOkRules" class="btn primary wide">明白了</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="engine.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
