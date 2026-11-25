@@ -1,4 +1,4 @@
-# Simple workflow for deploying static content to GitHub Pages
+# Deploy static content to GitHub Pages
 name: Deploy static content to Pages
 
 on:
@@ -9,35 +9,49 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Permissions required by GitHub Pages deployment.
+# `actions: read` lets deploy-pages list the artifact of this workflow run.
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Allow only one concurrent deployment, skipping runs queued between the
+# in-progress and latest queued run. Do not cancel in-progress runs, so
+# production deployments are allowed to finish.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
+  # Build job: check out the repo and upload the `github-pages` artifact.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          # Upload the whole repository (the site is static, no build step).
+          path: "."
+
+  # Deploy job: runs in a separate job so the artifact has time to be
+  # finalized/indexed before deploy-pages looks it up. Running upload and
+  # deploy back-to-back in one job intermittently fails with
+  # "No artifacts named github-pages were found".
   deploy:
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # Upload entire repository
-          path: '.'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
