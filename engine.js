@@ -1,9 +1,9 @@
 /* =========================================================
  *  暗棋象棋 · 规则引擎（纯逻辑，无 DOM 依赖）
  *  ---------------------------------------------------------
- *  规则 v6：
- *  1. 红帅固定在 (4,9)、黑将固定在 (4,0)，开局即为明棋；
- *     其余 30 枚棋子（双方各 15 枚，不含将帅）完全随机暗置在其余 30 个点位上。
+ *  规则 v7：
+ *  1. 红帅 (4,9)、黑将 (4,0)，以及双方的仕/士 (3,9)(5,9)/(3,0)(5,0)
+ *     开局即明置并固定在九宫；其余 26 枚棋子（双方各 13 枚）完全随机暗置。
  *  2. 每个点位同时决定暗子的「位置兵种」与「位置归属」：
  *     - 走法 = 该点位的标准兵种；
  *     - 归属 = 该点位标准兵的所属方。
@@ -100,16 +100,20 @@
 
       let id = 0;
 
-      /* 将帅明置于九宫 */
-      const generals = [
-        { side: RED, x: 4, y: 9 },
-        { side: BLACK, x: 4, y: 0 }
+      /* 将帅与士明置于九宫标准位置 */
+      const fixed = [
+        { side: RED, type: 'K', x: 4, y: 9 },
+        { side: BLACK, type: 'K', x: 4, y: 0 },
+        { side: RED, type: 'A', x: 3, y: 9 },
+        { side: RED, type: 'A', x: 5, y: 9 },
+        { side: BLACK, type: 'A', x: 3, y: 0 },
+        { side: BLACK, type: 'A', x: 5, y: 0 }
       ];
-      for (const g of generals) {
+      for (const g of fixed) {
         const p = {
           id: ++id,
           side: g.side,
-          type: 'K',
+          type: g.type,
           x: g.x,
           y: g.y,
           revealed: true,
@@ -119,17 +123,19 @@
         this.grid[g.y][g.x] = p;
       }
 
-      /* 其余 30 枚身份完全随机，落到除将帅外的 30 个点位 */
+      /* 其余 26 枚身份完全随机，落到除将帅/士外的 26 个点位 */
       const idents = [];
       for (const side of [BLACK, RED]) {
         for (const s of STANDARD) {
-          if (s[0] === side && s[1] !== 'K') idents.push({ side, type: s[1] });
+          if (s[0] === side && s[1] !== 'K' && s[1] !== 'A') {
+            idents.push({ side, type: s[1] });
+          }
         }
       }
       shuffle(idents);
 
       const squares = STANDARD
-        .filter(s => s[1] !== 'K')
+        .filter(s => s[1] !== 'K' && s[1] !== 'A')
         .map(s => [s[2], s[3]]);
 
       idents.forEach((d, i) => {

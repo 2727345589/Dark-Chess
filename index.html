@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#0b0f14" />
   <title>暗棋象棋 · 对弈</title>
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body data-turn="r">
   <div class="app">
@@ -102,7 +102,7 @@
       </div>
       <div class="modal-body">
         <h3>开局</h3>
-        <p>红帅固定在九宫 (4,9)、黑将固定在九宫 (4,0)，<b>开局即明棋</b>；其余 30 枚棋子（双方各 15 枚，不含将帅）<b>完全随机暗置</b>在其余 30 个点位上。</p>
+        <p>红帅 (4,9)、黑将 (4,0)，以及双方士/仕 (3,9)(5,9) / (3,0)(5,0)，<b>开局即明置并固定在九宫</b>；其余 26 枚棋子（双方各 13 枚）<b>完全随机暗置</b>在其余 26 个点位上。</p>
         <ul>
           <li>每个点位同时决定暗子的<b>位置兵种</b>和<b>位置归属</b>：红方阵地上的暗子归红方，黑方阵地上的归黑方。</li>
           <li>暗子先按位置身份行走，走完翻面，恢复真实兵种与真实归属。</li>
@@ -114,7 +114,7 @@
           <li>暗子先按它所在点位的<b>位置身份</b>行走 / 吃子（兵种走法 + 位置归属），走完<b>自动翻面</b>。</li>
           <li>翻面后露出它的<b>真实兵种与真实归属</b>，之后按真实身份行动——可能和刚才的走法、归属都不同。</li>
           <li>翻出是对方棋子：它留在落点，归对方所有。</li>
-          <li>吃暗子也有风险：对方阵地上的暗子翻开后可能是<b>你自己的</b>（将帅除外，将帅始终明置）。</li>
+          <li>吃暗子也有风险：对方阵地上的暗子翻开后可能是<b>你自己的</b>（将帅与士除外，它们始终明置）。</li>
         </ul>
 
         <h3>地域限制</h3>
@@ -151,7 +151,7 @@
         </ul>
 
         <h3>小提示</h3>
-        <p>双方阵容固定：每方 2 車、2 馬、2 相/象、2 仕/士、1 帥/將、2 炮、5 兵/卒。将帅明置九宫、士限九宫；其余暗子带阵营光晕（红 / 黑），按位置身份走，翻面后按真实身份走——“位置”和“真身”的错位就是全部乐趣。</p>
+        <p>双方阵容固定：每方 2 車、2 馬、2 相/象、2 仕/士、1 帥/將、2 炮、5 兵/卒。将帅与士明置九宫并限九宫；其余暗子带阵营光晕（红 / 黑），按位置身份走，翻面后按真实身份走——“位置”和“真身”的错位就是全部乐趣。</p>
       </div>
       <button id="btnOkRules" class="btn primary wide">明白了</button>
     </div>
@@ -159,7 +159,7 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="engine.js?v=6"></script>
-  <script src="ui.js?v=6"></script>
+  <script src="engine.js?v=7"></script>
+  <script src="ui.js?v=7"></script>
 </body>
 </html>
