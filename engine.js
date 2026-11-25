@@ -1,18 +1,19 @@
 /* =========================================================
  *  暗棋象棋 · 规则引擎（纯逻辑，无 DOM 依赖）
  *  ---------------------------------------------------------
- *  规则 v5：
- *  1. 32 枚棋子（红黑 + 兵种）完全随机落在标准棋盘的 32 个点位上，
- *     全部背面朝上。
+ *  规则 v6：
+ *  1. 红帅固定在 (4,9)、黑将固定在 (4,0)，开局即为明棋；
+ *     其余 30 枚棋子（双方各 15 枚，不含将帅）完全随机暗置在其余 30 个点位上。
  *  2. 每个点位同时决定暗子的「位置兵种」与「位置归属」：
  *     - 走法 = 该点位的标准兵种；
- *     - 归属 = 该点位标准兵的所属方（红方阵地上的暗子归红方）。
- *     因此红黑都只能走自己阵地上的暗子，以及自己已翻开的明子。
- *  3. 暗子先按位置身份行走 / 吃子（只能吃对方阵地上的暗子或对方明子），
- *     走完自动翻面，露出真实兵种与真实归属；此后按真实身份行动
- *     —— 可能和刚才的走法、归属都不同。
- *  4. 取消地域限制（象可过河、士可出宫、将可出宫）。
- *  5. 不设将军：吃掉对方将帅即胜；误吃自家将帅判负。
+ *     - 归属 = 该点位标准兵的所属方。
+ *     暗子先按位置身份行走 / 吃子，走完自动翻面，恢复真实兵种与真实归属。
+ *  3. 将帅、士限九宫；象可过河；其余棋子取消地域限制。
+ *  4. 恢复将军 / 应将 / 将死：
+ *     - 暗子按「位置身份」参与将军判定（位置兵种 + 位置归属是公开的）；
+ *     - 不能走成己方被将军；
+ *     - 被将军无解为将死，无子可走为困毙。
+ *  5. 吃掉对方将帅同样判胜。
  * ========================================================= */
 (function (root, factory) {
   const api = factory();
@@ -66,6 +67,12 @@
   const other = s => (s === RED ? BLACK : RED);
   const inB = (x, y) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
 
+  /* 九宫：红方 x3-5 / y7-9，黑方 x3-5 / y0-2 */
+  function inPalace(side, x, y) {
+    if (x < 3 || x > 5) return false;
+    return side === RED ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2);
+  }
+
   function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -89,16 +96,47 @@
       this.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       this.pieces = [];
       this.captured = [];
+      this.history = [];
 
-      /* 身份完全随机，落到 32 个标准点位 */
-      const idents = STANDARD.map(([side, type]) => ({ side, type }));
+      let id = 0;
+
+      /* 将帅明置于九宫 */
+      const generals = [
+        { side: RED, x: 4, y: 9 },
+        { side: BLACK, x: 4, y: 0 }
+      ];
+      for (const g of generals) {
+        const p = {
+          id: ++id,
+          side: g.side,
+          type: 'K',
+          x: g.x,
+          y: g.y,
+          revealed: true,
+          alive: true
+        };
+        this.pieces.push(p);
+        this.grid[g.y][g.x] = p;
+      }
+
+      /* 其余 30 枚身份完全随机，落到除将帅外的 30 个点位 */
+      const idents = [];
+      for (const side of [BLACK, RED]) {
+        for (const s of STANDARD) {
+          if (s[0] === side && s[1] !== 'K') idents.push({ side, type: s[1] });
+        }
+      }
       shuffle(idents);
 
+      const squares = STANDARD
+        .filter(s => s[1] !== 'K')
+        .map(s => [s[2], s[3]]);
+
       idents.forEach((d, i) => {
-        const x = STANDARD[i][2];
-        const y = STANDARD[i][3];
+        const x = squares[i][0];
+        const y = squares[i][1];
         const p = {
-          id: i + 1,
+          id: ++id,
           side: d.side,
           type: d.type,
           x,
@@ -115,7 +153,6 @@
       this.winner = null;
       this.reason = '';
       this.lastEvent = null;
-      this.history = [];
     }
 
     /* ---------------- 悔棋 ---------------- */
@@ -259,12 +296,20 @@
         }
 
         case 'A': {
-          for (const [dx, dy] of DIAG) add(p.x + dx, p.y + dy);
+          for (const [dx, dy] of DIAG) {
+            const nx = p.x + dx;
+            const ny = p.y + dy;
+            if (inPalace(side, nx, ny)) add(nx, ny);
+          }
           break;
         }
 
         case 'K': {
-          for (const [dx, dy] of DIRS) add(p.x + dx, p.y + dy);
+          for (const [dx, dy] of DIRS) {
+            const nx = p.x + dx;
+            const ny = p.y + dy;
+            if (inPalace(side, nx, ny)) add(nx, ny);
+          }
 
           // 飞将：同列无子，可吃对方明将
           for (const dy of [-1, 1]) {
@@ -313,10 +358,10 @@
       return this.pseudoMoves(p);
     }
 
-    /* 仅供提示：明将是否正被对方明子攻击 */
+    /* 将军判定：明子按真实身份、暗子按位置身份参与 */
     isAttacked(x, y, by) {
       for (const q of this.pieces) {
-        if (!q.alive || !q.revealed || q.side !== by) continue;
+        if (!q.alive || this.effSide(q) !== by) continue;
         for (const [mx, my] of this.pseudoMoves(q)) {
           if (mx === x && my === y) return true;
         }
@@ -324,9 +369,66 @@
       return false;
     }
 
-    kingUnderAttack(side) {
+    inCheck(side) {
       const k = this.kingOf(side);
       return !!k && this.isAttacked(k.x, k.y, other(side));
+    }
+
+    /* 正在将军的棋子（UI 高亮用） */
+    checkersOf(side) {
+      const k = this.kingOf(side);
+      if (!k) return [];
+      const by = other(side);
+      const out = [];
+      for (const q of this.pieces) {
+        if (!q.alive || this.effSide(q) !== by) continue;
+        for (const [mx, my] of this.pseudoMoves(q)) {
+          if (mx === k.x && my === k.y) { out.push(q); break; }
+        }
+      }
+      return out;
+    }
+
+    /* 试走：暗子按位置身份（临时视为己方）落在目标点，检查己方是否被将军 */
+    safeAfter(p, x, y, side) {
+      const s = side || this.turn;
+      const ox = p.x;
+      const oy = p.y;
+      const target = this.grid[y][x];
+      const targetIdx = target ? this.pieces.indexOf(target) : -1;
+
+      this.grid[oy][ox] = null;
+      if (target) {
+        this.grid[y][x] = null;
+        if (targetIdx >= 0) this.pieces.splice(targetIdx, 1);
+      }
+
+      const wasRevealed = p.revealed;
+      const wasSide = p.side;
+      p.revealed = true;
+      p.side = s;
+      p.x = x;
+      p.y = y;
+      this.grid[y][x] = p;
+
+      const ok = !this.inCheck(s);
+
+      p.revealed = wasRevealed;
+      p.side = wasSide;
+      p.x = ox;
+      p.y = oy;
+      this.grid[oy][ox] = p;
+      this.grid[y][x] = target;
+      if (target && targetIdx >= 0) this.pieces.splice(targetIdx, 0, target);
+
+      return ok;
+    }
+
+    /* 合法着法：位置身份允许，且不能把己方走成被将军 */
+    legalMoves(p, side) {
+      const s = side || this.turn;
+      if (!p || !p.alive || this.effSide(p) !== s) return [];
+      return this.pseudoMoves(p).filter(([x, y]) => this.safeAfter(p, x, y, s));
     }
 
     /* ---------------- 行动 ---------------- */
@@ -334,7 +436,7 @@
       if (this.over) return false;
       for (const p of this.pieces) {
         if (!p.alive || this.effSide(p) !== side) continue;
-        if (this.pseudoMoves(p).length > 0) return true;
+        if (this.legalMoves(p, side).length > 0) return true;
       }
       return false;
     }
@@ -365,7 +467,7 @@
       if (this.over || !p || !p.alive) return null;
 
       const mover = this.turn;
-      const moves = this.movesFor(p, mover);
+      const moves = this.legalMoves(p, mover);
       if (!moves.some(m => m[0] === x && m[1] === y)) return null;
 
       this.history.push(this.snapshot());
@@ -434,9 +536,10 @@
     evaluate() {
       if (this.over) return;
       if (!this.hasAnyAction(this.turn)) {
+        const checked = this.inCheck(this.turn);
         this.over = true;
         this.winner = other(this.turn);
-        this.reason = '困毙';
+        this.reason = checked ? '将死' : '困毙';
       }
     }
   }

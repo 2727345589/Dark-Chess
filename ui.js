@@ -214,6 +214,17 @@
       }
     }
 
+    // 将军高亮：被将军的将帅 + 正在将军的敌方棋子
+    const kings = new Set();
+    const checkers = new Set();
+    for (const s of [RED, BLACK]) {
+      if (game.inCheck(s)) {
+        const k = game.kingOf(s);
+        if (k) kings.add(k.id);
+        for (const c of game.checkersOf(s)) checkers.add(c.id);
+      }
+    }
+
     for (const p of game.pieces) {
       let el = els.get(p.id);
       if (!el) {
@@ -237,6 +248,8 @@
         hidePieceEl(el);
       }
 
+      el.classList.toggle('in-check', kings.has(p.id));
+      el.classList.toggle('checker', checkers.has(p.id));
       el.classList.toggle('last-move', p.id === lastMovedId);
     }
   }
@@ -287,16 +300,20 @@
 
     const redActive = !game.over && side === RED;
     const blackActive = !game.over && side === BLACK;
+    const checkedRed = !game.over && game.inCheck(RED);
+    const checkedBlack = !game.over && game.inCheck(BLACK);
 
     zoneRed.classList.toggle('active', redActive);
     zoneBlack.classList.toggle('active', blackActive);
+    zoneRed.classList.toggle('in-check', checkedRed);
+    zoneBlack.classList.toggle('in-check', checkedBlack);
 
     stateRed.textContent = game.over
       ? (game.winner === RED ? '获胜' : '—')
-      : (redActive ? '行棋' : '等待');
+      : (checkedRed ? '被将军' : (redActive ? '行棋' : '等待'));
     stateBlack.textContent = game.over
       ? (game.winner === BLACK ? '获胜' : '—')
-      : (blackActive ? '行棋' : '等待');
+      : (checkedBlack ? '被将军' : (blackActive ? '行棋' : '等待'));
 
     dotRed.classList.toggle('live', redActive);
     dotBlack.classList.toggle('live', blackActive);
@@ -371,7 +388,7 @@
       if (old) old.classList.remove('selected');
     }
     selected = p;
-    legal = game.movesFor(p, game.turn);
+    legal = game.legalMoves(p, game.turn);
     const el = els.get(p.id);
     if (el) el.classList.add('selected');
     renderMarks();
@@ -404,6 +421,11 @@
         showResult();
       }, 560);
       return;
+    }
+
+    if (game.inCheck(game.turn)) {
+      addLog('将军！' + SIDE_NAME[game.turn] + '必须应将', 'warn');
+      toast('将军！');
     }
 
     busy = true;
@@ -583,8 +605,9 @@
     resultGlyph.style.color = w === RED ? '#b3271f' : '#1e2a33';
     resultTitle.textContent = SIDE_NAME[w] + '胜';
     resultSub.textContent =
+      game.reason === '将死' ? '将死对方' :
       game.reason === '擒王' ? '擒获对方将帅' :
-      game.reason === '误食己方将帅' ? '对方误食自家将帅' : '对方无子可走';
+      game.reason === '困毙' ? '对方无子可走' : '对方无解';
     resultEl.classList.remove('hidden');
     updateStatus();
   }
