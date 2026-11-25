@@ -15,8 +15,14 @@
   const turnDot = document.getElementById('turnDot');
   const turnName = document.getElementById('turnName');
   const turnHint = document.getElementById('turnHint');
+  const btnUndo = document.getElementById('btnUndo');
+  const btnUndo2 = document.getElementById('btnUndo2');
   const btnNew = document.getElementById('btnNew');
   const btnRules = document.getElementById('btnRules');
+  const btnFull = document.getElementById('btnFull');
+  const btnExitTheater = document.getElementById('btnExitTheater');
+  const theaterDot = document.getElementById('theaterDot');
+  const theaterName = document.getElementById('theaterName');
   const btnAgain = document.getElementById('btnAgain');
   const btnCloseRules = document.getElementById('btnCloseRules');
   const btnOkRules = document.getElementById('btnOkRules');
@@ -32,6 +38,10 @@
   const resultSub = document.getElementById('resultSub');
   const rulesEl = document.getElementById('rules');
   const toastEl = document.getElementById('toast');
+  const captureFx = document.getElementById('captureFx');
+  const cfIcon = document.getElementById('cfIcon');
+  const cfTitle = document.getElementById('cfTitle');
+  const cfSub = document.getElementById('cfSub');
 
   /* ---------------- 状态 ---------------- */
   let game = new Engine();
@@ -43,6 +53,11 @@
   let toastTimer = 0;
   let lastMovedId = null;    // 上一步走动的棋子
   const pendingFlip = new Set(); // 等待“先走完再翻面”的暗子
+
+  let logEntries = [];
+  const logStack = [];       // 悔棋时的记录快照
+  let cfTimer1 = 0;
+  let cfTimer2 = 0;
 
   /* ---------------- 棋盘绘制 ---------------- */
   function buildBoard() {
@@ -169,8 +184,10 @@
     for (const [id, el] of els) {
       if (!alive.has(id)) {
         els.delete(id);
-        el.classList.add('captured');
-        setTimeout(() => el.remove(), 380);
+        if (!el.classList.contains('captured')) {
+          el.classList.add('captured');
+          setTimeout(() => el.remove(), 900);
+        }
       }
     }
 
@@ -190,11 +207,56 @@
 
       if (p.revealed && !el.classList.contains('revealed') && !pendingFlip.has(p.id)) {
         revealPieceEl(el, p);
+      } else if (!p.revealed && el.classList.contains('revealed')) {
+        // 悔棋后可能要把已翻开的棋子重新盖回去
+        el.classList.remove('revealed');
+        const front = el.querySelector('.front');
+        front.textContent = '';
+        front.classList.remove('red', 'black');
       }
 
       el.classList.toggle('in-check', warnKing === p);
       el.classList.toggle('last-move', p.id === lastMovedId);
     }
+  }
+
+  /* ---------------- 吃子动画 ---------------- */
+  function showCaptureFx(piece, by) {
+    cfIcon.textContent = NAMES[piece.side][piece.type];
+    cfIcon.className = 'cf-icon ' + piece.side;
+    cfTitle.textContent = SIDE_NAME[by] + ' 吃子';
+    cfSub.textContent = SIDE_NAME[piece.side] + NAMES[piece.side][piece.type];
+
+    clearTimeout(cfTimer1);
+    clearTimeout(cfTimer2);
+    captureFx.classList.remove('hidden', 'show');
+    void captureFx.offsetWidth;
+    captureFx.classList.add('show');
+
+    cfTimer1 = setTimeout(() => {
+      captureFx.classList.remove('show');
+      cfTimer2 = setTimeout(() => captureFx.classList.add('hidden'), 320);
+    }, 1150);
+  }
+
+  function hideCaptureFx() {
+    clearTimeout(cfTimer1);
+    clearTimeout(cfTimer2);
+    captureFx.classList.remove('show');
+    captureFx.classList.add('hidden');
+  }
+
+  function animateCapture(piece, by) {
+    const el = els.get(piece.id);
+    if (el) {
+      els.delete(piece.id);
+      const front = el.querySelector('.front');
+      front.textContent = NAMES[piece.side][piece.type];
+      front.classList.add(piece.side === RED ? 'red' : 'black');
+      el.classList.add('revealed', 'captured');
+      setTimeout(() => el.remove(), 900);
+    }
+    showCaptureFx(piece, by);
   }
 
   function shakeEl(p) {
@@ -211,12 +273,15 @@
     const side = game.turn;
     document.body.dataset.turn = side;
     turnDot.className = 'turn-dot ' + side;
+    theaterDot.className = 'turn-dot ' + side;
 
     if (game.over) {
       turnName.textContent = '对局结束';
       turnHint.textContent = SIDE_NAME[game.winner] + '获胜 · ' + game.reason;
+      theaterName.textContent = '对局结束';
     } else {
       turnName.textContent = SIDE_NAME[side] + '行棋';
+      theaterName.textContent = SIDE_NAME[side] + '行棋';
       let hint = '暗子按位置兵种直接走，走完翻面见真身';
       if (selected) {
         if (selected.revealed) {
@@ -235,11 +300,14 @@
     statHidden.textContent = hidden;
     statRevealed.textContent = game.pieces.length - hidden;
     statCaptured.textContent = game.captured.length;
+
+    btnUndo.disabled = game.history.length === 0;
+    btnUndo2.disabled = game.history.length === 0;
   }
 
   function updateCaptured() {
-    fillCap(capRedEl, game.captured.filter(p => p.side === RED));
-    fillCap(capBlackEl, game.captured.filter(p => p.side === BLACK));
+    fillCap(capRedEl, game.captured.filter(c => c.by === RED));
+    fillCap(capBlackEl, game.captured.filter(c => c.by === BLACK));
   }
 
   function fillCap(el, list) {
@@ -251,20 +319,29 @@
       el.appendChild(s);
       return;
     }
-    for (const p of list) {
+    for (const c of list) {
       const d = document.createElement('div');
-      d.className = 'mini ' + p.side;
-      d.textContent = NAMES[p.side][p.type];
+      d.className = 'mini ' + c.side;
+      d.textContent = NAMES[c.side][c.type];
       el.appendChild(d);
     }
   }
 
+  function renderLog() {
+    logEl.innerHTML = '';
+    for (let i = logEntries.length - 1; i >= 0; i--) {
+      const e = logEntries[i];
+      const li = document.createElement('li');
+      li.className = 'log-item' + (e.kind ? ' ' + e.kind : '');
+      li.textContent = e.text;
+      logEl.appendChild(li);
+    }
+  }
+
   function addLog(text, kind) {
-    const li = document.createElement('li');
-    li.className = 'log-item' + (kind ? ' ' + kind : '');
-    li.textContent = text;
-    logEl.prepend(li);
-    while (logEl.children.length > 60) logEl.lastElementChild.remove();
+    logEntries.push({ text, kind });
+    if (logEntries.length > 80) logEntries.shift();
+    renderLog();
   }
 
   function toast(msg) {
@@ -341,8 +418,11 @@
     const ev = game.attempt(p, x, y);
     if (!ev) return;
 
+    logStack.push(logEntries.slice());
     lastMovedId = p.id;
     busy = true;
+
+    if (ev.captured) animateCapture(ev.captured, mover);
 
     const present = () => {
       let text = ev.text;
@@ -423,13 +503,15 @@
     handleSquare(sq.x, sq.y);
   });
 
-  /* ---------------- 开局 / 结算 ---------------- */
+  /* ---------------- 开局 / 悔棋 / 结算 ---------------- */
   function startNewGame() {
     token++;
     busy = false;
     game = new Engine();
     els.clear();
     pendingFlip.clear();
+    logStack.length = 0;
+    logEntries = [];
     piecesLayer.innerHTML = '';
     marksLayer.innerHTML = '';
     logEl.innerHTML = '';
@@ -438,12 +520,45 @@
     lastMovedId = null;
     resultEl.classList.add('hidden');
     toastEl.classList.remove('show');
+    hideCaptureFx();
 
     fitCell();
     syncPieces();
     updateCaptured();
     updateStatus();
     addLog('新局开始 · 32 枚棋子随机落位，暗子保留位置兵种与位置归属', 'sys');
+  }
+
+  function doUndo() {
+    if (busy) {
+      toast('等动画结束再悔棋');
+      return;
+    }
+    if (!game.history.length) {
+      toast('没有可悔的棋');
+      return;
+    }
+
+    token++;
+    pendingFlip.clear();
+    hideCaptureFx();
+    resultEl.classList.add('hidden');
+
+    if (!game.undo()) return;
+
+    // 清掉可能还在播放的吃子残影
+    piecesLayer.querySelectorAll('.piece.captured').forEach(el => el.remove());
+
+    if (logStack.length) {
+      logEntries = logStack.pop();
+      renderLog();
+    }
+    lastMovedId = null;
+    clearSelection(false);
+    syncPieces();
+    updateCaptured();
+    updateStatus();
+    toast('已悔棋');
   }
 
   function requestNewGame() {
@@ -455,6 +570,7 @@
 
   function showResult() {
     if (!game.over) return;
+    hideCaptureFx();
     const w = game.winner;
     resultGlyph.textContent = NAMES[w].K;
     resultGlyph.style.color = w === RED ? '#b3271f' : '#1e2a33';
@@ -466,7 +582,43 @@
     updateStatus();
   }
 
+  /* ---------------- 全屏模式 ---------------- */
+  const isTheater = () => document.body.classList.contains('theater');
+
+  function enterTheater() {
+    document.body.classList.add('theater');
+    requestAnimationFrame(fitCell);
+    if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  }
+
+  function exitTheater() {
+    document.body.classList.remove('theater');
+    requestAnimationFrame(fitCell);
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  function toggleTheater() {
+    if (isTheater()) exitTheater();
+    else enterTheater();
+  }
+
   /* ---------------- 按钮 / 弹窗 ---------------- */
+  btnUndo.addEventListener('click', doUndo);
+  btnUndo2.addEventListener('click', doUndo);
+  btnFull.addEventListener('click', toggleTheater);
+  btnExitTheater.addEventListener('click', exitTheater);
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && isTheater()) {
+      document.body.classList.remove('theater');
+      requestAnimationFrame(fitCell);
+    }
+  });
+
   btnNew.addEventListener('click', requestNewGame);
   btnAgain.addEventListener('click', startNewGame);
 
@@ -482,8 +634,14 @@
   });
 
   window.addEventListener('keydown', e => {
+    if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      doUndo();
+      return;
+    }
     if (e.key === 'Escape') {
       if (!rulesEl.classList.contains('hidden')) closeRules();
+      else if (isTheater()) exitTheater();
       else if (selected) clearSelection();
     }
     if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) {

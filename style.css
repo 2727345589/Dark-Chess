@@ -381,9 +381,29 @@ body[data-turn="b"] .board {
 }
 
 .piece.captured {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.35) rotate(24deg);
+  animation: capturePop 0.85s cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
   pointer-events: none;
+  z-index: 14;
+}
+
+@keyframes capturePop {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -58%) scale(1.3) rotate(-6deg);
+    filter: brightness(1.5) drop-shadow(0 0 18px rgba(255, 90, 60, 0.9));
+  }
+  55% {
+    opacity: 1;
+    transform: translate(-50%, -64%) scale(1.22) rotate(4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -96%) scale(0.28) rotate(18deg);
+  }
 }
 
 .piece.shake {
@@ -493,7 +513,7 @@ body[data-turn="b"] .turn-card {
   color: var(--muted);
 }
 
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .stats { display: flex; gap: 10px; }
 
@@ -592,12 +612,22 @@ body[data-turn="b"] .turn-card {
 
 .cap-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .cap-line:first-of-type { margin-top: 0; }
+
+.cap-main { flex: 1 1 auto; min-width: 0; }
+
+.cap-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: #7d8794;
+}
 
 .cap-tag {
   width: 20px;
@@ -866,6 +896,130 @@ body[data-turn="b"] .turn-card {
 
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---------------- 吃子动画 ---------------- */
+.capture-fx {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 18px 9px 9px;
+  border-radius: 999px;
+  background: rgba(14, 20, 28, 0.94);
+  border: 1px solid rgba(255, 120, 90, 0.5);
+  box-shadow:
+    0 20px 44px -18px rgba(0, 0, 0, 0.95),
+    0 0 28px rgba(255, 80, 50, 0.28);
+  transform: translate(-50%, -14px) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.2, 1.3, 0.4, 1);
+  white-space: nowrap;
+}
+
+.capture-fx.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+
+.cf-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+  font-size: 21px;
+  font-weight: 700;
+  background: radial-gradient(circle at 34% 26%, #fffdf7, #ecd9b2 65%, #d3b98c);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2) inset,
+    0 0 0 3px rgba(255, 120, 90, 0.4),
+    0 6px 12px rgba(0, 0, 0, 0.5);
+}
+
+.cf-icon.r { color: #b3271f; }
+.cf-icon.b { color: #1e2a33; }
+
+.cf-info { display: flex; flex-direction: column; gap: 1px; }
+.cf-title { font-size: 12.5px; letter-spacing: 0.1em; color: #ffd9a6; }
+.cf-sub { font-size: 11px; color: #9aa4b1; }
+
+/* ---------------- 全屏（剧场）模式 ---------------- */
+.theater-bar { display: none; }
+
+body.theater { overflow: hidden; }
+
+body.theater .app {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  min-height: 0;
+  padding: 0;
+}
+
+body.theater .header,
+body.theater .footer,
+body.theater .turn-card,
+body.theater .actions,
+body.theater .stats,
+body.theater .log-box { display: none; }
+
+body.theater .main {
+  height: 100vh;
+  padding: 56px 22px 18px;
+  gap: 24px;
+  align-items: center;
+}
+
+body.theater .board {
+  width: min(56vw, calc((100vh - 96px) * 0.9), 980px);
+}
+
+body.theater .panel {
+  width: min(24vw, 300px);
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+body.theater .panel-card.captured {
+  margin: 0;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+body.theater .theater-bar {
+  display: flex;
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(14, 20, 28, 0.9);
+  border: 1px solid rgba(216, 178, 106, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.9);
+}
+
+.theater-name { font-size: 13px; letter-spacing: 0.08em; color: #e9dfc9; }
+
+.btn.tiny {
+  flex: none;
+  padding: 7px 12px;
+  font-size: 11.5px;
+  border-radius: 999px;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* ---------------- 响应式 ---------------- */
 @media (max-width: 940px) {
   .app { padding-top: 16px; }
@@ -898,6 +1052,21 @@ body[data-turn="b"] .turn-card {
   .log { max-height: 180px; }
 
   .footer { display: none; }
+
+  body.theater .main {
+    flex-direction: column;
+    padding: 52px 12px 12px;
+    gap: 10px;
+  }
+
+  body.theater .board {
+    width: min(92vw, calc((100vh - 250px) * 0.9));
+  }
+
+  body.theater .panel {
+    width: min(92vw, 560px);
+    flex-direction: row;
+  }
 }
 
 @media (max-width: 520px) {

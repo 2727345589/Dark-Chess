@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#0b0f14" />
   <title>暗棋象棋 · 位置身份 · 翻面见真身</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body data-turn="r">
   <div class="app">
@@ -37,6 +37,14 @@
               <button id="btnAgain" class="btn primary">再来一局</button>
             </div>
           </div>
+
+          <div id="captureFx" class="capture-fx hidden">
+            <div class="cf-icon" id="cfIcon">車</div>
+            <div class="cf-info">
+              <div class="cf-title" id="cfTitle">红方吃子</div>
+              <div class="cf-sub" id="cfSub">黑車</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -50,8 +58,10 @@
         </div>
 
         <div class="actions">
+          <button id="btnUndo" class="btn ghost">悔棋</button>
           <button id="btnNew" class="btn">新局</button>
           <button id="btnRules" class="btn ghost">规则</button>
+          <button id="btnFull" class="btn ghost">全屏</button>
         </div>
 
         <div class="stats">
@@ -61,14 +71,20 @@
         </div>
 
         <section class="panel-card captured">
-          <h3>已吃棋子</h3>
+          <h3>战利品</h3>
           <div class="cap-line">
             <span class="cap-tag r">红</span>
-            <div id="capRed" class="cap-list"><span class="cap-empty">—</span></div>
+            <div class="cap-main">
+              <span class="cap-label">红方吃子</span>
+              <div id="capRed" class="cap-list"><span class="cap-empty">—</span></div>
+            </div>
           </div>
           <div class="cap-line">
             <span class="cap-tag b">黑</span>
-            <div id="capBlack" class="cap-list"><span class="cap-empty">—</span></div>
+            <div class="cap-main">
+              <span class="cap-label">黑方吃子</span>
+              <div id="capBlack" class="cap-list"><span class="cap-empty">—</span></div>
+            </div>
           </div>
         </section>
 
@@ -80,6 +96,13 @@
     </main>
 
     <footer class="footer">身份完全随机 · 暗子保留位置兵种与位置归属 · 走完翻面 · 明子恢复真实身份</footer>
+  </div>
+
+  <div class="theater-bar" id="theaterBar">
+    <span class="turn-dot r" id="theaterDot"></span>
+    <span class="theater-name" id="theaterName">红方行棋</span>
+    <button id="btnUndo2" class="btn ghost tiny">悔棋</button>
+    <button id="btnExitTheater" class="btn ghost tiny">退出全屏</button>
   </div>
 
   <div id="rules" class="modal hidden">
@@ -126,6 +149,13 @@
           <li>无子可走，判负（困毙）。</li>
         </ul>
 
+        <h3>操作</h3>
+        <ul>
+          <li><b>悔棋</b>：点“悔棋”或 <b>Ctrl / Cmd + Z</b>，可连续悔棋。</li>
+          <li><b>全屏</b>：点“全屏”进入剧场模式，只保留棋盘与战利品；按 <b>Esc</b> 退出。</li>
+          <li><b>吃子</b>：被吃的棋子会翻开、放大展示，然后归入<b>吃子方</b>的战利品（与棋子本身是红是黑无关）。</li>
+        </ul>
+
         <h3>小提示</h3>
         <p>双方阵容固定：每方 2 車、2 馬、2 相/象、2 仕/士、1 帥/將、2 炮、5 兵/卒。暗子按位置身份走，翻面后按真实身份走——所以“位置”和“真身”的错位就是全部乐趣。</p>
       </div>
@@ -135,7 +165,7 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="engine.js"></script>
-  <script src="ui.js"></script>
+  <script src="engine.js?v=3"></script>
+  <script src="ui.js?v=3"></script>
 </body>
 </html>

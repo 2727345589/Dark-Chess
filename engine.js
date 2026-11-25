@@ -115,6 +115,37 @@
       this.winner = null;
       this.reason = '';
       this.lastEvent = null;
+      this.history = [];
+    }
+
+    /* ---------------- 悔棋 ---------------- */
+    snapshot() {
+      return {
+        pieces: this.pieces.map(p => ({
+          id: p.id, side: p.side, type: p.type,
+          x: p.x, y: p.y, revealed: p.revealed, alive: p.alive
+        })),
+        captured: this.captured.map(c => ({ side: c.side, type: c.type, by: c.by })),
+        turn: this.turn,
+        over: this.over,
+        winner: this.winner,
+        reason: this.reason
+      };
+    }
+
+    undo() {
+      if (!this.history.length) return false;
+      const s = this.history.pop();
+      this.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      this.pieces = s.pieces.map(d => ({ ...d }));
+      for (const p of this.pieces) this.grid[p.y][p.x] = p;
+      this.captured = s.captured.map(c => ({ ...c }));
+      this.turn = s.turn;
+      this.over = s.over;
+      this.winner = s.winner;
+      this.reason = s.reason;
+      this.lastEvent = null;
+      return true;
     }
 
     /* ---------------- 基础查询 ---------------- */
@@ -337,6 +368,8 @@
       const moves = this.movesFor(p, mover);
       if (!moves.some(m => m[0] === x && m[1] === y)) return null;
 
+      this.history.push(this.snapshot());
+
       const wasHidden = !p.revealed;
       const templateType = wasHidden ? TEMPLATE[p.y][p.x] : null;
 
@@ -361,7 +394,7 @@
         target.revealed = true;
         const idx = this.pieces.indexOf(target);
         if (idx >= 0) this.pieces.splice(idx, 1);
-        this.captured.push(target);
+        this.captured.push({ side: target.side, type: target.type, by: mover });
         captured = target;
       }
 
