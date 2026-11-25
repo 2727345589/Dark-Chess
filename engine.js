@@ -1,18 +1,18 @@
 /* =========================================================
  *  暗棋象棋 · 规则引擎（纯逻辑，无 DOM 依赖）
  *  ---------------------------------------------------------
- *  规则 v4：
- *  1. 双方棋子各自随机布在己方阵地：红方在下半场、黑方在上半场，
- *     每方 16 枚棋子的兵种随机打乱，全部背面朝上。
- *     因此「归谁」一眼可知（己方阵地就是己方棋子）。
- *  2. 每个点位有一个固定的「位置兵种」= 标准布局中该位置的兵种。
- *     暗子按所在点位的兵种走法行走（方向按行棋方），可以吃对方的
- *     明子，也可以吃对方的暗子；不能吃自己的棋子。
- *  3. 暗子走完（并结算吃子）后自动翻面，露出真实兵种；
- *     之后「恢复」它自己的兵种，按真实身份行动
- *     —— 可能和刚才的走法完全不同。
+ *  规则 v5：
+ *  1. 32 枚棋子（红黑 + 兵种）完全随机落在标准棋盘的 32 个点位上，
+ *     全部背面朝上。
+ *  2. 每个点位同时决定暗子的「位置兵种」与「位置归属」：
+ *     - 走法 = 该点位的标准兵种；
+ *     - 归属 = 该点位标准兵的所属方（红方阵地上的暗子归红方）。
+ *     因此红黑都只能走自己阵地上的暗子，以及自己已翻开的明子。
+ *  3. 暗子先按位置身份行走 / 吃子（只能吃对方阵地上的暗子或对方明子），
+ *     走完自动翻面，露出真实兵种与真实归属；此后按真实身份行动
+ *     —— 可能和刚才的走法、归属都不同。
  *  4. 取消地域限制（象可过河、士可出宫、将可出宫）。
- *  5. 不设将军：吃掉对方将帅即胜。
+ *  5. 不设将军：吃掉对方将帅即胜；误吃自家将帅判负。
  * ========================================================= */
 (function (root, factory) {
   const api = factory();
@@ -56,7 +56,12 @@
 
   /* 位置兵种表：每个点位固定的兵种 */
   const TEMPLATE = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-  for (const [, type, x, y] of STANDARD) TEMPLATE[y][x] = type;
+  /* 位置归属表：每个点位标准兵的所属方 */
+  const POS_SIDE = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  for (const [side, type, x, y] of STANDARD) {
+    TEMPLATE[y][x] = type;
+    POS_SIDE[y][x] = side;
+  }
 
   const other = s => (s === RED ? BLACK : RED);
   const inB = (x, y) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
@@ -85,25 +90,25 @@
       this.pieces = [];
       this.captured = [];
 
-      /* 红黑各自在己方阵地内随机打乱兵种 */
-      for (const side of [BLACK, RED]) {
-        const squares = STANDARD.filter(s => s[0] === side);
-        const types = shuffle(squares.map(s => s[1]));
+      /* 身份完全随机，落到 32 个标准点位 */
+      const idents = STANDARD.map(([side, type]) => ({ side, type }));
+      shuffle(idents);
 
-        squares.forEach(([, , x, y], i) => {
-          const p = {
-            id: this.pieces.length + 1,
-            side,
-            type: types[i],
-            x,
-            y,
-            revealed: false,
-            alive: true
-          };
-          this.pieces.push(p);
-          this.grid[y][x] = p;
-        });
-      }
+      idents.forEach((d, i) => {
+        const x = STANDARD[i][2];
+        const y = STANDARD[i][3];
+        const p = {
+          id: i + 1,
+          side: d.side,
+          type: d.type,
+          x,
+          y,
+          revealed: false,
+          alive: true
+        };
+        this.pieces.push(p);
+        this.grid[y][x] = p;
+      });
 
       this.turn = RED;
       this.over = false;
@@ -121,9 +126,15 @@
       return inB(x, y) ? TEMPLATE[y][x] : null;
     }
 
-    /* 暗子：按位置兵种；明子：按真实兵种 */
-    effectiveType(p) {
-      return p.revealed ? p.type : TEMPLATE[p.y][p.x];
+    /* 暗子按位置身份；明子按真实身份 */
+    effSide(p) {
+      if (p.revealed) return p.side;
+      return POS_SIDE[p.y][p.x] || p.side;
+    }
+
+    effType(p) {
+      if (p.revealed) return p.type;
+      return TEMPLATE[p.y][p.x] || p.type;
     }
 
     kingOf(side) {
@@ -139,15 +150,14 @@
     }
 
     /* ---------------- 走法 ----------------
-     * 暗子：位置兵种 + 行棋方方向；明子：真实兵种。
-     * 只能走自己的棋子，只能吃对方的棋子。 */
-    pseudoMoves(p, asSide) {
-      const revealed = p.revealed;
-      const side = revealed ? p.side : (asSide || p.side);
-      const type = revealed ? p.type : TEMPLATE[p.y][p.x];
+     * 暗子：位置兵种 + 位置归属；明子：真实兵种 + 真实归属。
+     * 只能操作属于自己一方的棋子，只能吃对方的棋子。 */
+    pseudoMoves(p) {
+      const side = this.effSide(p);
+      const type = this.effType(p);
 
       const out = [];
-      const canCapture = q => q.side !== side;   // 不能吃自己的棋子（明暗都不行）
+      const canCapture = q => this.effSide(q) !== side;
 
       const add = (x, y) => {
         if (!inB(x, y)) return;
@@ -268,8 +278,8 @@
     movesFor(p, side) {
       if (!p || !p.alive) return [];
       const s = side || this.turn;
-      if (p.side !== s) return [];               // 只能走自己的棋
-      return this.pseudoMoves(p, s);
+      if (this.effSide(p) !== s) return [];       // 只能操作自己一方的棋
+      return this.pseudoMoves(p);
     }
 
     /* 仅供提示：明将是否正被对方明子攻击 */
@@ -292,8 +302,8 @@
     hasAnyAction(side) {
       if (this.over) return false;
       for (const p of this.pieces) {
-        if (!p.alive || p.side !== side) continue;
-        if (this.pseudoMoves(p, side).length > 0) return true;
+        if (!p.alive || this.effSide(p) !== side) continue;
+        if (this.pseudoMoves(p).length > 0) return true;
       }
       return false;
     }
@@ -375,7 +385,7 @@
       if (captured && captured.type === 'K') {
         this.over = true;
         this.winner = other(captured.side);
-        this.reason = '擒王';
+        this.reason = captured.side === mover ? '误食己方将帅' : '擒王';
         return ev;
       }
 

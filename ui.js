@@ -351,8 +351,16 @@
       }
       if (ev.captured) {
         text += '，吃' + SIDE_NAME[ev.captured.side] + NAMES[ev.captured.side][ev.captured.type];
+        if (ev.captured.side === mover) text += '（竟是自己人！）';
       }
       addLog(text, mover);
+
+      if (ev.wasHidden && p.side !== mover) {
+        toast('翻面：对方' + NAMES[p.side][p.type] + '，棋子归对方');
+      } else if (ev.captured && ev.captured.side === mover) {
+        toast('竟吃掉了自己人！');
+      }
+
       finishTurn();
     };
 
@@ -390,7 +398,7 @@
         clearSelection();
         return;
       }
-      if (p && p.side === game.turn) {
+      if (p && game.effSide(p) === game.turn) {
         selectPiece(p);
         return;
       }
@@ -400,7 +408,7 @@
 
     if (!p) return;
 
-    if (p.side === game.turn) {
+    if (game.effSide(p) === game.turn) {
       selectPiece(p);
     } else {
       toast('这是对方的棋子');
@@ -435,7 +443,7 @@
     syncPieces();
     updateCaptured();
     updateStatus();
-    addLog('新局开始 · 双方各自随机布子，暗子按位置兵种行走', 'sys');
+    addLog('新局开始 · 32 枚棋子随机落位，暗子保留位置兵种与位置归属', 'sys');
   }
 
   function requestNewGame() {
@@ -452,7 +460,8 @@
     resultGlyph.style.color = w === RED ? '#b3271f' : '#1e2a33';
     resultTitle.textContent = SIDE_NAME[w] + '胜';
     resultSub.textContent =
-      game.reason === '擒王' ? '擒获对方将帅' : '对方无子可走';
+      game.reason === '擒王' ? '擒获对方将帅' :
+      game.reason === '误食己方将帅' ? '对方误食自家将帅' : '对方无子可走';
     resultEl.classList.remove('hidden');
     updateStatus();
   }
