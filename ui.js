@@ -1,5 +1,5 @@
 /* =========================================================
-   暗棋象棋 · 界面与交互（规则 v2）
+   暗棋象棋 · 双边对弈界面
    ========================================================= */
 (function () {
   'use strict';
@@ -12,32 +12,39 @@
   const marksLayer = document.getElementById('marks');
   const svg = document.getElementById('boardSvg');
 
-  const turnDot = document.getElementById('turnDot');
-  const turnName = document.getElementById('turnName');
-  const turnHint = document.getElementById('turnHint');
-  const btnUndo = document.getElementById('btnUndo');
-  const btnUndo2 = document.getElementById('btnUndo2');
+  const zoneRed = document.getElementById('zoneRed');
+  const zoneBlack = document.getElementById('zoneBlack');
+  const dotRed = document.getElementById('dotRed');
+  const dotBlack = document.getElementById('dotBlack');
+  const stateRed = document.getElementById('stateRed');
+  const stateBlack = document.getElementById('stateBlack');
+  const trophiesRed = document.getElementById('trophiesRed');
+  const trophiesBlack = document.getElementById('trophiesBlack');
+  const undoRed = document.getElementById('undoRed');
+  const undoBlack = document.getElementById('undoBlack');
+  const menuRed = document.getElementById('menuRed');
+  const menuBlack = document.getElementById('menuBlack');
+
   const btnNew = document.getElementById('btnNew');
   const btnRules = document.getElementById('btnRules');
+  const btnLog = document.getElementById('btnLog');
   const btnFull = document.getElementById('btnFull');
-  const btnExitTheater = document.getElementById('btnExitTheater');
-  const theaterDot = document.getElementById('theaterDot');
-  const theaterName = document.getElementById('theaterName');
+  const btnCloseMenu = document.getElementById('btnCloseMenu');
+  const btnCloseLog = document.getElementById('btnCloseLog');
   const btnAgain = document.getElementById('btnAgain');
   const btnCloseRules = document.getElementById('btnCloseRules');
   const btnOkRules = document.getElementById('btnOkRules');
-  const capRedEl = document.getElementById('capRed');
-  const capBlackEl = document.getElementById('capBlack');
-  const statHidden = document.getElementById('statHidden');
-  const statRevealed = document.getElementById('statRevealed');
-  const statCaptured = document.getElementById('statCaptured');
+
   const logEl = document.getElementById('log');
+  const menuModal = document.getElementById('menuModal');
+  const logModal = document.getElementById('logModal');
+  const rulesEl = document.getElementById('rules');
   const resultEl = document.getElementById('result');
   const resultGlyph = document.getElementById('resultGlyph');
   const resultTitle = document.getElementById('resultTitle');
   const resultSub = document.getElementById('resultSub');
-  const rulesEl = document.getElementById('rules');
   const toastEl = document.getElementById('toast');
+
   const captureFx = document.getElementById('captureFx');
   const cfIcon = document.getElementById('cfIcon');
   const cfTitle = document.getElementById('cfTitle');
@@ -49,13 +56,13 @@
   let selected = null;
   let legal = [];
   let busy = false;
-  let token = 0;             // 防止旧动画回调影响新对局
+  let token = 0;
   let toastTimer = 0;
-  let lastMovedId = null;    // 上一步走动的棋子
-  const pendingFlip = new Set(); // 等待“先走完再翻面”的暗子
+  let lastMovedId = null;
+  const pendingFlip = new Set();
 
   let logEntries = [];
-  const logStack = [];       // 悔棋时的记录快照
+  const logStack = [];
   let cfTimer1 = 0;
   let cfTimer2 = 0;
 
@@ -128,10 +135,18 @@
       }
     }
 
+    // 楚河：下方红方正向阅读；漢界：上方黑方阅读（旋转 180°）
     const rl = add('text', { x: X(2), y: Y(4) + 70, class: 'river', 'text-anchor': 'middle' });
-    rl.textContent = '楚河';
-    const rr = add('text', { x: X(6), y: Y(4) + 70, class: 'river', 'text-anchor': 'middle' });
-    rr.textContent = '漢界';
+    rl.textContent = '楚 河';
+
+    const rr = add('text', {
+      x: X(6),
+      y: Y(4) + 70,
+      class: 'river',
+      'text-anchor': 'middle',
+      transform: 'rotate(180 ' + X(6) + ' ' + (Y(4) + 55) + ')'
+    });
+    rr.textContent = '漢 界';
   }
 
   /* ---------------- 坐标换算 ---------------- */
@@ -164,7 +179,7 @@
     el.innerHTML =
       '<div class="piece-inner">' +
         '<div class="face back"></div>' +
-        '<div class="face front"></div>' +
+        '<div class="face front"><span class="glyph"></span></div>' +
       '</div>';
     el.style.left = pctX(p.x);
     el.style.top = pctY(p.y);
@@ -173,9 +188,17 @@
 
   function revealPieceEl(el, p) {
     const front = el.querySelector('.front');
-    front.textContent = NAMES[p.side][p.type];
+    const glyph = front.querySelector('.glyph');
+    glyph.textContent = NAMES[p.side][p.type];
     front.classList.add(p.side === RED ? 'red' : 'black');
     el.classList.add('revealed');
+  }
+
+  function hidePieceEl(el) {
+    el.classList.remove('revealed');
+    const front = el.querySelector('.front');
+    front.querySelector('.glyph').textContent = '';
+    front.classList.remove('red', 'black');
   }
 
   function syncPieces() {
@@ -191,10 +214,6 @@
       }
     }
 
-    const warnKing = (!game.over && game.kingUnderAttack(game.turn))
-      ? game.kingOf(game.turn)
-      : null;
-
     for (const p of game.pieces) {
       let el = els.get(p.id);
       if (!el) {
@@ -205,17 +224,19 @@
       el.style.left = pctX(p.x);
       el.style.top = pctY(p.y);
 
+      // 暗子按阵营加光晕（位置归属）
+      if (!p.revealed) {
+        el.dataset.camp = game.effSide(p);
+      } else {
+        el.removeAttribute('data-camp');
+      }
+
       if (p.revealed && !el.classList.contains('revealed') && !pendingFlip.has(p.id)) {
         revealPieceEl(el, p);
       } else if (!p.revealed && el.classList.contains('revealed')) {
-        // 悔棋后可能要把已翻开的棋子重新盖回去
-        el.classList.remove('revealed');
-        const front = el.querySelector('.front');
-        front.textContent = '';
-        front.classList.remove('red', 'black');
+        hidePieceEl(el);
       }
 
-      el.classList.toggle('in-check', warnKing === p);
       el.classList.toggle('last-move', p.id === lastMovedId);
     }
   }
@@ -251,7 +272,7 @@
     if (el) {
       els.delete(piece.id);
       const front = el.querySelector('.front');
-      front.textContent = NAMES[piece.side][piece.type];
+      front.querySelector('.glyph').textContent = NAMES[piece.side][piece.type];
       front.classList.add(piece.side === RED ? 'red' : 'black');
       el.classList.add('revealed', 'captured');
       setTimeout(() => el.remove(), 900);
@@ -259,63 +280,39 @@
     showCaptureFx(piece, by);
   }
 
-  function shakeEl(p) {
-    const el = els.get(p.id);
-    if (!el) return;
-    el.classList.remove('shake');
-    void el.offsetWidth;
-    el.classList.add('shake');
-    setTimeout(() => el.classList.remove('shake'), 420);
-  }
-
-  /* ---------------- 状态栏 / 记录 / 战损 ---------------- */
+  /* ---------------- 状态 / 战利品 / 记录 ---------------- */
   function updateStatus() {
     const side = game.turn;
     document.body.dataset.turn = side;
-    turnDot.className = 'turn-dot ' + side;
-    theaterDot.className = 'turn-dot ' + side;
 
-    if (game.over) {
-      turnName.textContent = '对局结束';
-      turnHint.textContent = SIDE_NAME[game.winner] + '获胜 · ' + game.reason;
-      theaterName.textContent = '对局结束';
-    } else {
-      turnName.textContent = SIDE_NAME[side] + '行棋';
-      theaterName.textContent = SIDE_NAME[side] + '行棋';
-      let hint = '暗子按位置兵种直接走，走完翻面见真身';
-      if (selected) {
-        if (selected.revealed) {
-          hint = '点击落点完成走子';
-        } else {
-          const t = game.templateAt(selected.x, selected.y);
-          hint = '暗子按「' + NAMES[side][t] + '位」走法行走，走完自动翻面';
-        }
-      } else if (game.kingUnderAttack(side)) {
-        hint = '将帅正受攻击，注意保护！';
-      }
-      turnHint.textContent = hint;
-    }
+    const redActive = !game.over && side === RED;
+    const blackActive = !game.over && side === BLACK;
 
-    const hidden = game.hiddenCount();
-    statHidden.textContent = hidden;
-    statRevealed.textContent = game.pieces.length - hidden;
-    statCaptured.textContent = game.captured.length;
+    zoneRed.classList.toggle('active', redActive);
+    zoneBlack.classList.toggle('active', blackActive);
 
-    btnUndo.disabled = game.history.length === 0;
-    btnUndo2.disabled = game.history.length === 0;
+    stateRed.textContent = game.over
+      ? (game.winner === RED ? '获胜' : '—')
+      : (redActive ? '行棋' : '等待');
+    stateBlack.textContent = game.over
+      ? (game.winner === BLACK ? '获胜' : '—')
+      : (blackActive ? '行棋' : '等待');
+
+    dotRed.classList.toggle('live', redActive);
+    dotBlack.classList.toggle('live', blackActive);
+
+    undoRed.disabled = game.history.length === 0;
+    undoBlack.disabled = game.history.length === 0;
+
+    btnFull.textContent = isTheater() ? '退出全屏' : '全屏';
   }
 
-  function updateCaptured() {
-    fillCap(capRedEl, game.captured.filter(c => c.by === RED));
-    fillCap(capBlackEl, game.captured.filter(c => c.by === BLACK));
-  }
-
-  function fillCap(el, list) {
+  function fillTrophies(el, list) {
     el.innerHTML = '';
     if (!list.length) {
       const s = document.createElement('span');
       s.className = 'cap-empty';
-      s.textContent = '—';
+      s.textContent = '暂无';
       el.appendChild(s);
       return;
     }
@@ -325,6 +322,11 @@
       d.textContent = NAMES[c.side][c.type];
       el.appendChild(d);
     }
+  }
+
+  function updateCaptured() {
+    fillTrophies(trophiesRed, game.captured.filter(c => c.by === RED));
+    fillTrophies(trophiesBlack, game.captured.filter(c => c.by === BLACK));
   }
 
   function renderLog() {
@@ -373,10 +375,9 @@
     const el = els.get(p.id);
     if (el) el.classList.add('selected');
     renderMarks();
-    updateStatus();
   }
 
-  function clearSelection(refresh) {
+  function clearSelection() {
     if (selected) {
       const el = els.get(selected.id);
       if (el) el.classList.remove('selected');
@@ -384,12 +385,11 @@
     selected = null;
     legal = [];
     marksLayer.innerHTML = '';
-    if (refresh !== false) updateStatus();
   }
 
   /* ---------------- 行动 ---------------- */
   function finishTurn() {
-    clearSelection(false);
+    clearSelection();
     syncPieces();
     updateCaptured();
     updateStatus();
@@ -446,11 +446,10 @@
 
     if (ev.wasHidden) pendingFlip.add(p.id);
 
-    clearSelection(false);
+    clearSelection();
     syncPieces();
     updateCaptured();
 
-    // 暗子：先走（或吃子），再翻面；翻面时再公布身份与战报
     if (ev.wasHidden) {
       const t = token;
       setTimeout(() => {
@@ -496,6 +495,15 @@
     }
   }
 
+  function shakeEl(p) {
+    const el = els.get(p.id);
+    if (!el) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 420);
+  }
+
   boardEl.addEventListener('click', e => {
     if (busy || game.over) return;
     const sq = pointToSquare(e);
@@ -522,7 +530,7 @@
     toastEl.classList.remove('show');
     hideCaptureFx();
 
-    fitCell();
+    requestAnimationFrame(fitCell);
     syncPieces();
     updateCaptured();
     updateStatus();
@@ -546,7 +554,6 @@
 
     if (!game.undo()) return;
 
-    // 清掉可能还在播放的吃子残影
     piecesLayer.querySelectorAll('.piece.captured').forEach(el => el.remove());
 
     if (logStack.length) {
@@ -554,7 +561,7 @@
       renderLog();
     }
     lastMovedId = null;
-    clearSelection(false);
+    clearSelection();
     syncPieces();
     updateCaptured();
     updateStatus();
@@ -582,11 +589,12 @@
     updateStatus();
   }
 
-  /* ---------------- 全屏模式 ---------------- */
+  /* ---------------- 全屏 ---------------- */
   const isTheater = () => document.body.classList.contains('theater');
 
   function enterTheater() {
     document.body.classList.add('theater');
+    updateStatus();
     requestAnimationFrame(fitCell);
     if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -595,6 +603,7 @@
 
   function exitTheater() {
     document.body.classList.remove('theater');
+    updateStatus();
     requestAnimationFrame(fitCell);
     if (document.fullscreenElement && document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
@@ -606,31 +615,47 @@
     else enterTheater();
   }
 
-  /* ---------------- 按钮 / 弹窗 ---------------- */
-  btnUndo.addEventListener('click', doUndo);
-  btnUndo2.addEventListener('click', doUndo);
-  btnFull.addEventListener('click', toggleTheater);
-  btnExitTheater.addEventListener('click', exitTheater);
+  /* ---------------- 弹窗 ---------------- */
+  function openMenu() { menuModal.classList.remove('hidden'); }
+  function closeMenu() { menuModal.classList.add('hidden'); }
+  function openLog() { renderLog(); logModal.classList.remove('hidden'); }
+  function closeLog() { logModal.classList.add('hidden'); }
+  function openRules() { rulesEl.classList.remove('hidden'); }
+  function closeRules() { rulesEl.classList.add('hidden'); }
+
+  function anyModalOpen() {
+    return !menuModal.classList.contains('hidden') ||
+           !logModal.classList.contains('hidden') ||
+           !rulesEl.classList.contains('hidden');
+  }
+
+  /* ---------------- 绑定 ---------------- */
+  menuRed.addEventListener('click', openMenu);
+  menuBlack.addEventListener('click', openMenu);
+  btnCloseMenu.addEventListener('click', closeMenu);
+  btnNew.addEventListener('click', () => { closeMenu(); requestNewGame(); });
+  btnRules.addEventListener('click', () => { closeMenu(); openRules(); });
+  btnLog.addEventListener('click', () => { closeMenu(); openLog(); });
+  btnFull.addEventListener('click', () => { closeMenu(); toggleTheater(); });
+
+  btnCloseLog.addEventListener('click', closeLog);
+  btnCloseRules.addEventListener('click', closeRules);
+  btnOkRules.addEventListener('click', closeRules);
+
+  undoRed.addEventListener('click', doUndo);
+  undoBlack.addEventListener('click', doUndo);
+  btnAgain.addEventListener('click', startNewGame);
+
+  menuModal.addEventListener('click', e => { if (e.target === menuModal) closeMenu(); });
+  logModal.addEventListener('click', e => { if (e.target === logModal) closeLog(); });
+  rulesEl.addEventListener('click', e => { if (e.target === rulesEl) closeRules(); });
 
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && isTheater()) {
       document.body.classList.remove('theater');
       requestAnimationFrame(fitCell);
+      updateStatus();
     }
-  });
-
-  btnNew.addEventListener('click', requestNewGame);
-  btnAgain.addEventListener('click', startNewGame);
-
-  const openRules = () => rulesEl.classList.remove('hidden');
-  const closeRules = () => rulesEl.classList.add('hidden');
-
-  btnRules.addEventListener('click', openRules);
-  btnCloseRules.addEventListener('click', closeRules);
-  btnOkRules.addEventListener('click', closeRules);
-
-  rulesEl.addEventListener('click', e => {
-    if (e.target === rulesEl) closeRules();
   });
 
   window.addEventListener('keydown', e => {
@@ -640,12 +665,15 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (!rulesEl.classList.contains('hidden')) closeRules();
+      if (!menuModal.classList.contains('hidden')) closeMenu();
+      else if (!logModal.classList.contains('hidden')) closeLog();
+      else if (!rulesEl.classList.contains('hidden')) closeRules();
       else if (isTheater()) exitTheater();
       else if (selected) clearSelection();
+      return;
     }
-    if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) {
-      if (rulesEl.classList.contains('hidden')) requestNewGame();
+    if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey && !anyModalOpen()) {
+      requestNewGame();
     }
   });
 

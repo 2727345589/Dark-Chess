@@ -1085,3 +1085,239 @@ body.theater .theater-bar {
   .turn-name { font-size: 15px; }
   .btn { padding: 10px 12px; font-size: 12px; }
 }
+
+/* =========================================================
+   双边对弈布局（覆盖旧版单面板布局）
+   ========================================================= */
+body { overflow-x: hidden; }
+
+.app {
+  width: 100%;
+  min-height: 100vh;
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+}
+
+.duel {
+  --board-w: min(58vw, calc((100vh - 130px) * 0.9), 780px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.duel .board { width: var(--board-w); }
+
+/* ---------------- 两侧玩家区 ---------------- */
+.zone {
+  width: var(--board-w);
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 14px 30px -24px rgba(0, 0, 0, 0.9);
+  transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+
+/* 黑方在上方，整体旋转 180°，坐对面阅读 */
+.zone-black { transform: rotate(180deg); }
+
+.zone-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+
+.zone-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #e8ddc6;
+  white-space: nowrap;
+}
+
+.zone-state {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: #7f8996;
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.zone.active .zone-state { color: #f0e2c4; }
+
+.zone-trophies {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+.zone-trophies::-webkit-scrollbar { display: none; }
+
+.zone-trophies .mini {
+  width: 22px;
+  height: 22px;
+  font-size: 12.5px;
+  flex: 0 0 auto;
+}
+
+.zone-trophies .cap-empty {
+  font-size: 11px;
+  color: #566170;
+  letter-spacing: 0.1em;
+}
+
+.zone-btn {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  border-radius: 8px;
+}
+
+.zone-red.active {
+  background: rgba(226, 74, 62, 0.07);
+  border-color: rgba(226, 74, 62, 0.42);
+  box-shadow: 0 0 26px -8px rgba(226, 74, 62, 0.5);
+}
+
+.zone-black.active {
+  background: rgba(140, 185, 220, 0.07);
+  border-color: rgba(150, 190, 220, 0.4);
+  box-shadow: 0 0 26px -8px rgba(120, 170, 210, 0.45);
+}
+
+/* 回合指示灯：非当前方变暗 */
+.turn-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  opacity: 0.35;
+  transition: opacity 0.3s, box-shadow 0.3s;
+}
+
+.turn-dot.r { background: #e8574a; box-shadow: none; }
+.turn-dot.b { background: #8ec4e8; box-shadow: none; }
+.turn-dot.live { opacity: 1; }
+.turn-dot.r.live { box-shadow: 0 0 12px #e8574a; }
+.turn-dot.b.live { box-shadow: 0 0 12px #8ec4e8; }
+
+/* ---------------- 暗棋阵营光晕 ---------------- */
+.piece[data-camp="r"] .face.back {
+  background: radial-gradient(circle at 34% 26%, #8a5a4a 0%, #4c2d26 48%, #2a1916 100%);
+  box-shadow:
+    0 0 0 2px rgba(226, 74, 62, 0.5) inset,
+    0 0 0 8px rgba(0, 0, 0, 0.26) inset,
+    0 0 0 2px rgba(226, 74, 62, 0.55),
+    0 0 22px rgba(226, 74, 62, 0.5),
+    0 9px 15px rgba(18, 9, 0, 0.5);
+}
+
+.piece[data-camp="b"] .face.back {
+  background: radial-gradient(circle at 34% 26%, #5a6672 0%, #2e3a45 50%, #161d24 100%);
+  box-shadow:
+    0 0 0 2px rgba(200, 220, 240, 0.22) inset,
+    0 0 0 8px rgba(0, 0, 0, 0.3) inset,
+    0 0 0 2px rgba(10, 16, 24, 0.9),
+    0 0 0 3.5px rgba(170, 200, 225, 0.35),
+    0 0 20px rgba(10, 20, 30, 0.85),
+    0 9px 15px rgba(0, 0, 0, 0.55);
+}
+
+/* 选中时以金色环为准，覆盖阵营光晕 */
+.piece.selected .face.back {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.28) inset,
+    0 0 0 8px rgba(0, 0, 0, 0.26) inset,
+    0 0 0 4px rgba(255, 209, 106, 0.95),
+    0 0 28px rgba(255, 196, 64, 0.8),
+    0 9px 15px rgba(18, 9, 0, 0.5);
+}
+
+/* 黑方棋子文字朝上家（旋转 180°） */
+.face.front .glyph { display: block; }
+.face.front.black .glyph { transform: rotate(180deg); }
+
+/* ---------------- 菜单 / 棋谱弹窗 ---------------- */
+.menu-card { width: min(420px, 92vw); }
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.menu-item {
+  width: 100%;
+  flex: none;
+  padding: 15px 12px;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+}
+
+.menu-hint {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #8d97a5;
+}
+
+.log-card { width: min(500px, 92vw); }
+.log-card .log { max-height: 52vh; }
+.log-card .modal-body { padding-right: 4px; }
+
+/* ---------------- 全屏 ---------------- */
+body.theater { overflow: hidden; }
+
+body.theater .app { padding: 0; }
+
+body.theater .duel {
+  --board-w: min(62vw, calc((100vh - 120px) * 0.9), 900px);
+}
+
+/* ---------------- 双边布局响应式 ---------------- */
+@media (max-width: 940px) {
+  .duel { --board-h: 0px; --board-w: min(94vw, calc((100vh - 150px) * 0.9), 620px); }
+
+  .zone {
+    height: 40px;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .zone-head { min-width: 76px; gap: 5px; }
+  .zone-name { font-size: 12px; }
+  .zone-state { display: none; }
+  .zone-trophies .mini { width: 20px; height: 20px; font-size: 11.5px; }
+  .zone-btn { padding: 5px 8px; font-size: 11px; }
+}
+
+@media (max-width: 520px) {
+  .app { padding: 6px 0; }
+  .duel { --board-w: min(96vw, calc((100vh - 140px) * 0.9)); gap: 6px; }
+  .zone { height: 36px; border-radius: 10px; }
+  .zone-head { min-width: 64px; }
+  .zone-name { font-size: 11.5px; }
+  .zone-btn { padding: 4px 7px; font-size: 10.5px; letter-spacing: 0.02em; }
+  .zone-trophies .mini { width: 18px; height: 18px; font-size: 10.5px; }
+  .board { border-radius: 12px; }
+}
+
+/* 覆盖旧版全屏下写死的棋盘宽度，统一走 --board-w */
+body.theater .duel .board { width: var(--board-w); }
