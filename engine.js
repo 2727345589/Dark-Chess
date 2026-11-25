@@ -1,18 +1,18 @@
 /* =========================================================
  *  暗棋象棋 · 规则引擎（纯逻辑，无 DOM 依赖）
  *  ---------------------------------------------------------
- *  规则 v3：
- *  1. 32 枚棋子（红黑 + 兵种）完全随机落在标准棋盘的 32 个点位上，
- *     全部背面朝上。
+ *  规则 v4：
+ *  1. 双方棋子各自随机布在己方阵地：红方在下半场、黑方在上半场，
+ *     每方 16 枚棋子的兵种随机打乱，全部背面朝上。
+ *     因此「归谁」一眼可知（己方阵地就是己方棋子）。
  *  2. 每个点位有一个固定的「位置兵种」= 标准布局中该位置的兵种。
- *     暗子按所在点位的兵种走法行走（方向按行棋方），可以吃明子，
- *     也可以吃暗子。
- *  3. 暗子走完（并结算吃子）后自动翻面，露出真实身份与归属；
- *     翻面后「恢复」它自己的兵种与归属，之后按真实身份行动
+ *     暗子按所在点位的兵种走法行走（方向按行棋方），可以吃对方的
+ *     明子，也可以吃对方的暗子；不能吃自己的棋子。
+ *  3. 暗子走完（并结算吃子）后自动翻面，露出真实兵种；
+ *     之后「恢复」它自己的兵种，按真实身份行动
  *     —— 可能和刚才的走法完全不同。
- *  4. 翻面后若是对方棋子：它留在落点，归对方所有。
- *  5. 取消地域限制（象可过河、士可出宫、将可出宫）。
- *  6. 不设将军：吃掉对方将帅即胜；不能吃己方棋子（暗子翻开是己方则行动取消）。
+ *  4. 取消地域限制（象可过河、士可出宫、将可出宫）。
+ *  5. 不设将军：吃掉对方将帅即胜。
  * ========================================================= */
 (function (root, factory) {
   const api = factory();
@@ -85,25 +85,25 @@
       this.pieces = [];
       this.captured = [];
 
-      /* 身份完全打乱后随机落到 32 个标准点位 */
-      const idents = STANDARD.map(([side, type]) => ({ side, type }));
-      shuffle(idents);
+      /* 红黑各自在己方阵地内随机打乱兵种 */
+      for (const side of [BLACK, RED]) {
+        const squares = STANDARD.filter(s => s[0] === side);
+        const types = shuffle(squares.map(s => s[1]));
 
-      idents.forEach((d, i) => {
-        const x = STANDARD[i][2];
-        const y = STANDARD[i][3];
-        const p = {
-          id: i + 1,
-          side: d.side,
-          type: d.type,
-          x,
-          y,
-          revealed: false,
-          alive: true
-        };
-        this.pieces.push(p);
-        this.grid[y][x] = p;
-      });
+        squares.forEach(([, , x, y], i) => {
+          const p = {
+            id: this.pieces.length + 1,
+            side,
+            type: types[i],
+            x,
+            y,
+            revealed: false,
+            alive: true
+          };
+          this.pieces.push(p);
+          this.grid[y][x] = p;
+        });
+      }
 
       this.turn = RED;
       this.over = false;
@@ -139,15 +139,15 @@
     }
 
     /* ---------------- 走法 ----------------
-     * 暗子：位置兵种 + 行棋方方向（且吃子判定按行棋方）
-     * 明子：真实兵种 + 自身归属 */
+     * 暗子：位置兵种 + 行棋方方向；明子：真实兵种。
+     * 只能走自己的棋子，只能吃对方的棋子。 */
     pseudoMoves(p, asSide) {
       const revealed = p.revealed;
       const side = revealed ? p.side : (asSide || p.side);
       const type = revealed ? p.type : TEMPLATE[p.y][p.x];
 
       const out = [];
-      const canCapture = q => !q.revealed || q.side !== side;
+      const canCapture = q => q.side !== side;   // 不能吃自己的棋子（明暗都不行）
 
       const add = (x, y) => {
         if (!inB(x, y)) return;
@@ -268,9 +268,7 @@
     movesFor(p, side) {
       if (!p || !p.alive) return [];
       const s = side || this.turn;
-      if (p.revealed) {
-        return p.side === s ? this.pseudoMoves(p, s) : [];
-      }
+      if (p.side !== s) return [];               // 只能走自己的棋
       return this.pseudoMoves(p, s);
     }
 
@@ -294,8 +292,7 @@
     hasAnyAction(side) {
       if (this.over) return false;
       for (const p of this.pieces) {
-        if (!p.alive) continue;
-        if (p.revealed && p.side !== side) continue;
+        if (!p.alive || p.side !== side) continue;
         if (this.pseudoMoves(p, side).length > 0) return true;
       }
       return false;
@@ -329,15 +326,6 @@
       const mover = this.turn;
       const moves = this.movesFor(p, mover);
       if (!moves.some(m => m[0] === x && m[1] === y)) return null;
-
-      /* 目标是与己方同阵营的暗子：不能吃，翻开它，行动取消 */
-      const target = this.grid[y][x];
-      if (target && !target.revealed && target.side === mover) {
-        target.revealed = true;
-        this.lastEvent = { type: 'own', piece: p, target };
-        this.endTurn();
-        return this.lastEvent;
-      }
 
       const wasHidden = !p.revealed;
       const templateType = wasHidden ? TEMPLATE[p.y][p.x] : null;
